@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 seL4 Project a Series of LF Projects, LLC -->
+<!-- SPDX-License-Identifier: BSD-2-Clause -->
+
 # seL4 Kernel - Rust Rewrite
 
 This directory contains the Rust implementation of the seL4 microkernel.
