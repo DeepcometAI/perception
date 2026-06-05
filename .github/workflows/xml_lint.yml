@@ -9,7 +9,7 @@ name: XML
 on:
   push:
     branches:
-      - master
+      - perception-*
     paths:
       - 'libsel4/**/sel4*.xml'
       - 'libsel4/**/sel4*.xsd'

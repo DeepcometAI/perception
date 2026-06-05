@@ -9,7 +9,7 @@ name: Proof Sync
 on:
   push:
     branches:
-      - master
+      - perception-*
   workflow_dispatch:
 
 jobs:

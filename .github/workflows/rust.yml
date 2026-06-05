@@ -8,12 +8,12 @@ name: Rust
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ 'perception-*' ]
     paths:
       - 'rust/**'
       - '.github/workflows/rust.yml'
   pull_request:
-    branches: [ master, main ]
+    branches: [ 'perception-*' ]
     paths:
       - 'rust/**'
       - '.github/workflows/rust.yml'

@@ -7,7 +7,7 @@ name: Trigger
 
 on:
   push:
-    branches: [master]
+    branches: ['perception-*']
 
 jobs:
   trigger:

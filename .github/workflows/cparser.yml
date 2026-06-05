@@ -10,7 +10,7 @@ name: C Parser
 
 on:
   push:
-    branches: [master]
+    branches: ['perception-*']
   pull_request:
   workflow_dispatch:
 
