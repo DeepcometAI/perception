@@ -19,13 +19,13 @@ updates:
       include: "scope"
 
   # 🦀 Rust crates (optional, only if /experiments/rust exists)
-  - package-ecosystem: "cargo"
-    directory: "/experiments/rust"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
+ # - package-ecosystem: "cargo"
+ #   directory: "/experiments/rust"
+ #   schedule:
+ #     interval: "weekly"
+ #   commit-message:
+ #     prefix: "deps"
+ #    include: "scope"
 
   # 📦 Git submodules
   - package-ecosystem: "gitsubmodule"
