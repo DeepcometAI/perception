@@ -64,7 +64,7 @@ jobs:
         march: ${{ matrix.march }}
         compiler: ${{ matrix.compiler }}
     - name: Upload images
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: images-${{ matrix.march }}-${{ matrix.compiler }}
         path: '*-images.tar.gz'
