@@ -1,15 +1,6 @@
 version: 2
 updates:
-  # Meson subprojects (C tooling, libraries)
-  - package-ecosystem: "meson"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-
-  # Python tooling (verification scripts, CI helpers)
+  # 🐍 Python tooling (verification scripts, CI helpers)
   - package-ecosystem: "pip"
     directory: "/tools"
     schedule:
@@ -18,7 +9,7 @@ updates:
       prefix: "deps"
       include: "scope"
 
-  # GitHub Actions workflows
+  # ⚙️ GitHub Actions workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -27,10 +18,18 @@ updates:
       prefix: "ci"
       include: "scope"
 
-  # Rust crates (optional, only if /experiments/rust exists)
-  # Dependabot will silently skip this if the directory is missing.
+  # 🦀 Rust crates (optional, only if /experiments/rust exists)
   - package-ecosystem: "cargo"
     directory: "/experiments/rust"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # 📦 Git submodules
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
     schedule:
       interval: "weekly"
     commit-message:
