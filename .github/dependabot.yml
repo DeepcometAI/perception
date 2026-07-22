@@ -1,3 +1,6 @@
+# Copyright 2026, Deepcomet AI
+#
+# SPDX-License-Identifier: BSD-2-Clause
 version: 2
 updates:
   # 🐍 Python tooling (verification scripts, CI helpers)

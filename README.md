@@ -1,3 +1,8 @@
+<!--
+    Copyright 2026, Deepcomet AI
+
+    SPDX-License-Identifier: BSD-2-Clause
+-->
 # Perception Kernel
 
 **Perception Kernel** is an experimental research fork of the **seL4 microkernel**, developed by the **Deepcomet Organization**. It is a dedicated sandbox for exploring AI‑native microkernel concepts, capability system evolution, and hybrid verification techniques. Perception is intentionally experimental: features are prototyped here, evaluated rigorously, and only the most promising ideas are migrated into the production **Zenith Kernel**.
