@@ -12,24 +12,3 @@ jobs:
   pr-checks:
     name: Checks
     uses: DeepcometAI/ci-actions/.github/workflows/pr.yml@master
-
-  preprocess:
-    name: Preprocess
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [ARM, ARM_HYP, AARCH64, RISCV64, X64]
-        feature: ["", MCS]
-        exclude:
-          - arch: ARM_HYP
-            feature: MCS
-          - arch: AARCH64
-            feature: MCS
-          - arch: X64
-            feature: MCS
-    steps:
-    - uses: DeepcometAI/ci-actions/preprocess@master
-      with:
-        L4V_ARCH: ${{ matrix.arch }}
-        L4V_FEATURES: ${{ matrix.feature }}
