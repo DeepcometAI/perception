@@ -39,7 +39,7 @@ jobs:
     concurrency: seL4-PR-C-proofs-pr-${{ github.event.number }}-idx-${{ strategy.job-index }}
     steps:
     - name: Proofs
-      uses: seL4/ci-actions/aws-proofs@master
+      uses: DeepcometAI/ci-actions/aws-proofs@master
       with:
         L4V_ARCH: ${{ matrix.arch }}
         L4V_FEATURES: ${{ matrix.features }}

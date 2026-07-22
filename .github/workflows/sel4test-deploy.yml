@@ -27,7 +27,7 @@ jobs:
       xml: ${{ steps.repo.outputs.xml }}
     steps:
     - id: repo
-      uses: seL4/ci-actions/repo-checkout@master
+      uses: DeepcometAI/ci-actions/repo-checkout@master
       with:
         manifest_repo: sel4test-manifest
         manifest: master.xml
@@ -41,7 +41,7 @@ jobs:
         march: [armv7a, armv8a, nehalem, rv32imac, rv64imac]
         compiler: [gcc, clang]
     steps:
-    - uses: seL4/ci-actions/sel4test-sim@master
+    - uses: DeepcometAI/ci-actions/sel4test-sim@master
       with:
         xml: ${{ needs.code.outputs.xml }}
         march: ${{ matrix.march }}
@@ -58,7 +58,7 @@ jobs:
         compiler: [gcc, clang]
     steps:
     - name: Build
-      uses: seL4/ci-actions/sel4test-hw@master
+      uses: DeepcometAI/ci-actions/sel4test-hw@master
       with:
         xml: ${{ needs.code.outputs.xml }}
         march: ${{ matrix.march }}
@@ -77,7 +77,7 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
     - id: matrix
-      uses: seL4/ci-actions/sel4test-hw-matrix@master
+      uses: DeepcometAI/ci-actions/sel4test-hw-matrix@master
 
   hw-run:
     name: HW Run
@@ -100,7 +100,7 @@ jobs:
         with:
           name: images-${{ matrix.march }}-${{ matrix.compiler }}
       - name: Run
-        uses: seL4/ci-actions/sel4test-hw-run@master
+        uses: DeepcometAI/ci-actions/sel4test-hw-run@master
         with:
           platform: ${{ matrix.platform }}
           compiler: ${{ matrix.compiler }}
@@ -116,7 +116,7 @@ jobs:
     needs: [code, hw-run]
     steps:
     - name: Deploy
-      uses: seL4/ci-actions/manifest-deploy@master
+      uses: DeepcometAI/ci-actions/manifest-deploy@master
       with:
         xml: ${{ needs.code.outputs.xml }}
         manifest_repo: sel4test-manifest
