@@ -17,7 +17,7 @@ use sel4_kernel::kernel;
 /// Currently a placeholder during the C to Rust migration process.
 #[no_mangle]
 pub extern "C" fn kernel_entry() -> ! {
-    kernel::init();   
+    kernel::init();
     loop {}
 }
 
