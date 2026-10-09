@@ -14,7 +14,7 @@ pub const KERNEL_VERSION: &str = "0.1.0";
 
 /// Placeholder module for kernel core functionality
 pub mod kernel {
-    /// Core kernel functionality
+    //! Core kernel functionality
 
     /// Initialize the kernel
     pub fn init() {
@@ -24,7 +24,7 @@ pub mod kernel {
 
 /// Placeholder module for IPC mechanisms
 pub mod ipc {
-    /// Inter-Process Communication
+    //! Inter-Process Communication
 
     /// Send a message
     pub fn send() {
@@ -34,7 +34,7 @@ pub mod ipc {
 
 /// Placeholder module for object management
 pub mod object {
-    /// Kernel object management
+    //! Kernel object management
 
     /// Initialize objects
     pub fn init() {
