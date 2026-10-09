@@ -29,11 +29,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust & Targets
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
+          targets: |
+            x86_64-unknown-none
+            aarch64-unknown-none
+            riscv64imac-unknown-none-elf
 
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -61,13 +65,21 @@ jobs:
         working-directory: rust
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      - name: Build
+      - name: Build (Default - x86_64)
         working-directory: rust
         run: cargo build --release --verbose
 
-      - name: Tests
+      - name: Build (AArch64)
         working-directory: rust
-        run: cargo test --verbose
+        run: cargo build --release --target aarch64-unknown-none --verbose
+
+      - name: Build (RISC-V)
+        working-directory: rust
+        run: cargo build --release --target riscv64imac-unknown-none-elf --verbose
+
+      - name: Library Unit Tests
+        working-directory: rust
+        run: cargo test --lib --verbose
 
       - name: Documentation
         working-directory: rust
