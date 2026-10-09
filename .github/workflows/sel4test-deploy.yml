@@ -91,7 +91,7 @@ jobs:
     concurrency: hw-run-${{ strategy.job-index }}
     steps:
       - name: Get machine queue
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: seL4/machine_queue
           path: machine_queue
