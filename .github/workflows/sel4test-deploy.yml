@@ -96,7 +96,7 @@ jobs:
           repository: seL4/machine_queue
           path: machine_queue
       - name: Download image
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: images-${{ matrix.march }}-${{ matrix.compiler }}
       - name: Run
