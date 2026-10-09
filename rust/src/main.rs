@@ -22,6 +22,7 @@ pub extern "C" fn kernel_entry() {
 
 /// Panic handler for the kernel
 #[panic_handler]
+#[cfg(not(test))]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
