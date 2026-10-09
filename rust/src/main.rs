@@ -12,7 +12,7 @@
 use sel4_kernel::kernel;
 
 /// Kernel entry point
-/// 
+///
 /// This function serves as the entry point for the seL4 kernel.
 /// Currently a placeholder during the C to Rust migration process.
 #[no_mangle]
