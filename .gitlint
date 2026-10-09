@@ -3,12 +3,30 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 [general]
-ignore=body-is-missing
 ignore-merge-commits=true
-ignore-revert-commits=true
+ignore-fixup-commits=false
+ignore-squash-commits=false
+regex-style-search=true
 
-[rule "T1"]
+[title-max-length]
 line-length=100
 
-[rule "B1"]
-line-length=120
+[title-must-not-contain-word]
+words=wip,squash,tosquash
+
+[body-max-line-length]
+line-length=100
+
+[body-min-length]
+min-length=0
+
+[ignore-by-title]
+# Ignore certain rules for commits of which the title matches a regex
+# E.g. Match commit titles that start with "Release"
+regex=^trivial(.*)
+ignore=B6
+
+[ignore-body-lines]
+# Ignore lines started with Co-authored-by, Signed-off-by
+# or lines containing a (possibly-space-indented) URL only.
+regex=(^Co-authored-by)|(^Signed-off-by)|(^\s*https?://\S+$)|(^Bumps \[)
