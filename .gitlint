@@ -1,0 +1,26 @@
+# Copyright 2026, Deepcomet AI
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+[general]
+# Ignore certain types of commits (e.g., Dependabot automated updates)
+ignore=body-is-missing
+ignore-merge-commits=true
+ignore-revert-commits=true
+
+# Extend gitlint rules for dependency updates
+# (Dependabot generates messages with longer lines and links)
+[rule "T1"]
+line-length=100
+
+[rule "B1"]
+line-length=120
+
+[rule "B2"]
+line-length=120
+
+# Exclude rules for Dependabot
+[ignore-by-body]
+# Pattern to match Dependabot commits
+pattern=^Bumps \[
+ignore=T1,B1,B2
