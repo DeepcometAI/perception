@@ -29,7 +29,7 @@ jobs:
     - id: repo
       uses: DeepcometAI/ci-actions/repo-checkout@master
       with:
-        manifest_repo: sel4test-manifest
+        manifest_repo: DeepcometAI/sel4test-manifest
         manifest: master.xml
 
   sim:
@@ -119,6 +119,6 @@ jobs:
       uses: DeepcometAI/ci-actions/manifest-deploy@master
       with:
         xml: ${{ needs.code.outputs.xml }}
-        manifest_repo: sel4test-manifest
+        manifest_repo: DeepcometAI/sel4test-manifest
       env:
         GH_SSH: ${{ secrets.CI_SSH }}
