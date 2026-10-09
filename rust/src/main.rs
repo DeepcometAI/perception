@@ -16,6 +16,7 @@ use sel4_kernel::kernel;
 /// This function serves as the entry point for the seL4 kernel.
 /// Currently a placeholder during the C to Rust migration process.
 #[no_mangle]
+#[allow(clippy::empty_loop)]
 pub extern "C" fn kernel_entry() -> ! {
     kernel::init();
     loop {}
