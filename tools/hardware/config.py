@@ -23,9 +23,6 @@ class Config:
         ''' Get page size in bits for this arch '''
         return 12  # 4096-byte pages
 
-    def get_smallest_kernel_object_alignment(self) -> int:
-        return 4  # seL4_MinUntypedBits is 4 for all configurations
-
     def get_device_page_bits(self) -> int:
         ''' Get page size in bits for mapping devices for this arch '''
         return self.get_page_bits()
@@ -45,7 +42,15 @@ class ARMConfig(Config):
         elif sel4arch == 'aarch32':
             self.KERNEL_PHYS_ALIGN = 24
         else:
-            self.KERNEL_PHYS_ALIGN = 0
+            # On AArch64, `PADDR_BASE` is always zero, and only `KERNEL_ELF_PADDR_BASE`
+            # uses `PHYS_BASE`, which is influenced by this alignment.
+            # For simplicity, we require that `KERNEL_ELF_PADDR_BASE` is aligned
+            # to seL4_LargePageBits so that we can map it directly using 2MiB
+            # pages. This does however reserve memory from the true bottom of
+            # RAM up to this alignment (exposed as device UT), but this is no
+            # more than part of a single 2MiB page, which should be acceptable
+            # on AArch64.
+            self.KERNEL_PHYS_ALIGN = 21
 
     def get_kernel_phys_align(self) -> int:
         return self.KERNEL_PHYS_ALIGN

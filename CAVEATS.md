@@ -9,8 +9,8 @@
 ## Implementation Correctness
 
 The following seL4 architectures have platforms with a C-level functional
-correctness proof. Proof support for further platforms for RISC-V is on
-the roadmap and expected in 2026.
+correctness proof. For the current seL4 release, these are all 64-bit platforms
+seL4 support, as well as all 32-bit Arm platforms that seL4 supports.
 
 - AArch32: Armv7-a with and without hypervisor extensions, no SMMU, no FPU, with
   fast path
@@ -32,6 +32,7 @@ the roadmap and expected in 2026.
   - Platforms:
     - `tx2`
     - `bcm2711`
+    - `bcm2712`
     - `hikey`
     - `imx8mm`
     - `imx8mq`
@@ -40,14 +41,25 @@ the roadmap and expected in 2026.
     - `odroidc2`
     - `odroidc4`
     - `rockpro64`
+    - `stm32mp2`
     - `tqma`
     - `tx1`
     - `ultra96v2`
     - `zynqmp`
 - RISC-V: 64-bit only, no FPU, no fast path
-  - Platforms: `hifive`
+  - Platforms:
+    - `hifive`
+    - `ariane`
+    - `bananapi-f3`
+    - `cheshire`
+    - `hifive-p550`
+    - `polarfire`
+    - `rocketchip`
+    - `star64`
 - x64: without VT-x and VT-d, with FPU, no fast path
   - Platforms: `pc99`
+- RISC-V MCS: 64-bit only, no FPU, no fast path, MCS configuration
+  - Platforms: `hifive`
 
 This proof covers the functional behaviour of the C code of the kernel. It does
 not cover machine code, compiler, linker, boot code, cache or TLB management.
@@ -107,10 +119,9 @@ avoided by careful system configuration if low latency is required.
 ## MCS
 
 The MCS configuration of the kernel addresses many of these real-time problems
-and provides principled access control for execution time, but its formal
-verification is currently still in progress. For RISC-V, design-level proofs
-have completed, and C-level proofs are in progress. Similar proofs for AArch64
-are planned.
+and provides principled access control for execution time. For RISC-V, a proof
+of functional correctness from abstract specification to C level has been
+completed. Functional correctness proofs for MCS on AArch64 are in progress.
 
 The MCS configuration is supported by the seL4 foundation and should generally
 be stable, with small API changes to be expected while verification is ongoing
@@ -188,6 +199,32 @@ there instead. The kernel guards against obvious mistakes such as attempting an
 unmap operation for a mapping slot that now points to another frame, but cannot
 distinguish a cap with correct mapping information for the old VSpace from a cap
 with correct mapping information for the new VSpace.
+
+## Devices, DMA, and Device-Untypeds
+
+At startup the kernel passes device-untyped capabilities to the initial
+user-level task. These capabilities cover regions for memory-mapped IO for
+devices, including DMA capable devices.
+
+This is intentional, because in seL4 device drivers run at user level and
+therefore need access to these devices. Some devices, especially DMA-capable
+devices, can bypass kernel protection mechanisms, for instance by writing to
+memory directly, by causing system errors, or by producing excessive interrupts.
+
+The proofs mentioned above assume that these behaviours do not occur, that is,
+that no device causes unrecoverable system errors and that no device writes to
+memory the kernel interacts with, or to memory that user space depends on
+for anything other than input.
+
+This means drivers handling such devices must be trusted to configure them
+safely, and it is the responsibility of the initial user-level task to only hand
+out capabilities for such devices to sufficiently trusted driver components.
+
+Where available, the IOMMU (x64) or SMMU (Arm) may be used to restrict where
+DMA-capable devices can write, but note that IOMMU/SMMU is not supported by
+verified configurations in seL4 yet. For static systems, on hardware where
+IOMMU/SMMU support is not currently available in seL4, it may also be possible
+to configure the IOMMU/SMMU before seL4 runs and restrict DMA that way.
 
 ## Intel VT-d (IOMMU)
 

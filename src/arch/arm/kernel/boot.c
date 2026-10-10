@@ -194,6 +194,14 @@ BOOT_CODE static bool_t init_cpu(void)
         vcpu_boot_init();
     }
 
+#ifdef CONFIG_ARCH_AARCH64
+    /* After activate_kernel_vspace(), so printf() is available. */
+    if (!config_set(CONFIG_ARM_HYPERVISOR_SUPPORT) && !check16BitASID()) {
+        printf("ERROR: kernel requires 16-bit ASIDs\n");
+        return false;
+    }
+#endif
+
 #ifdef CONFIG_HARDWARE_DEBUG_API
     if (!Arch_initHardwareBreakpoints()) {
         printf("Kernel built with CONFIG_HARDWARE_DEBUG_API, but this board doesn't "
@@ -470,12 +478,7 @@ static BOOT_CODE bool_t try_init_kernel(
         extra_bi_offset += dtb_size;
     }
 
-    if (extra_bi_size > extra_bi_offset) {
-        /* provide a chunk for any leftover padding in the extended boot info */
-        header.id = SEL4_BOOTINFO_HEADER_PADDING;
-        header.len = (extra_bi_size - extra_bi_offset);
-        *(seL4_BootInfoHeader *)(rootserver.extra_bi + extra_bi_offset) = header;
-    }
+    assert(extra_bi_size == extra_bi_offset);
 
     if (config_set(CONFIG_TK1_SMMU)) {
         ndks_boot.bi_frame->ioSpaceCaps = create_iospace_caps(root_cnode_cap);

@@ -56,7 +56,12 @@
 #define CNTHP_CVAL " p15, 6, %Q0, %R0, c14   " /* 64-bit RW PL2 Physical Timer CompareValue register */
 #define PMUSERENR  " p15, 0,  %0,  c9, c14, 0" /* 32-bit RW PMU PL0 enable */
 #define ID_DFR0    " p15, 0,  %0,  c0,  c1, 2" /* 32-bit RO Debug feature register */
+#define ID_PFR0    " p15, 0,  %0,  c0,  c1, 0" /* 32-bit RO Processor feature register 0 */
 #define ID_PFR1    " p15, 0,  %0,  c0,  c1, 1" /* 32-bit RO CPU feature register */
+#define TEECR      " p14, 6,  %0,  c0,  c0, 0" /* 32-bit RW ThumbEE configuration register */
+#define TEEHBR     " p14, 6,  %0,  c1,  c0, 0" /* 32-bit RW ThumbEE handler base register */
+#define JOSCR      " p14, 7,  %0,  c1,  c0, 0" /* 32-bit RW Jazelle OS control register */
+#define JMCR       " p14, 7,  %0,  c2,  c0, 0" /* 32-bit RW Jazelle main configuration register */
 #define CPACR      " p15, 0,  %0,  c1,  c0, 2" /* 32-bit Architectural Feature Access Control Register */
 #define VMPIDR     " p15, 4,  %0,  c0,  c0, 5" /* 32-bit RW Virtualization Multiprocessor ID Register */
 #define MPIDR      " p15, 0,  %0, c0,  c0, 5"
@@ -193,6 +198,60 @@ static inline void writeTTBCR(word_t val)
     asm volatile("mcr p15, 0, %0, c2, c0, 2":: "r"(val));
 }
 
+/* PAR is always a 64-bit register and needs to be context switched, because it
+ * can be written to directly in EL1.
+ *
+ * Ignored for verification, because inline asm formalisation cannot deal
+ * with 64-bit asm block output on 32-bit architectures, nor with two
+ * outputs of the same asm block. Read op is side-effect free.
+ */
+/** MODIFIES: */
+/** DONT_TRANSLATE */
+static inline uint64_t readPAR_64(void)
+{
+    uint64_t val = 0;
+    asm volatile("mrrc p15, 0, %Q0, %R0, c7":"=r"(val):);
+    return val;
+}
+
+/* Ignored for verification, because inline asm formalisation cannot deal
+ * with 64-bit asm block output on 32-bit architectures, nor with two
+ * outputs of the same asm block.
+ */
+/** MODIFIES: [*] */
+/** DONT_TRANSLATE */
+static inline void writePAR_64(uint64_t val)
+{
+    asm volatile("mcrr p15, 0, %Q0, %R0, c7":: "r"(val));
+}
+
+static inline word_t readPARhigh(void)
+{
+    uint64_t par = readPAR_64();
+    return (word_t)(par >> 32);
+}
+
+static inline word_t readPARlow(void)
+{
+    /* use 32-bit read to get only the low bits */
+    word_t val = 0;
+    asm volatile("mrc p15, 0, %0, c7, c4, 0":"=r"(val):);
+    return val;
+}
+
+static inline void writePARhigh(word_t val)
+{
+    uint64_t par_high = (uint64_t) val << 32;
+    uint64_t par_low = readPARlow();
+    writePAR_64(par_high | par_low);
+}
+
+static inline void writePARlow(word_t val)
+{
+    /* avoid read-modify-write by using 32-bit write directly */
+    asm volatile("mcr p15, 0, %0, c7, c4, 0":: "r"(val));
+}
+
 static inline void writeTPIDRURW(word_t reg)
 {
     asm volatile("mcr p15, 0, %0, c13, c0, 2" :: "r"(reg));
@@ -268,19 +327,6 @@ static inline word_t readDACR(void)
     word_t reg;
     asm volatile("mrc p15, 0, %0, c3, c0, 0" : "=r"(reg));
     return reg;
-}
-
-static inline void setCurrentPD(paddr_t addr)
-{
-    /* Before changing the PD ensure all memory stores have completed */
-    if (config_set(CONFIG_ARM_HYPERVISOR_SUPPORT)) {
-        setCurrentPDPL2(addr);
-    } else {
-        dsb();
-        writeTTBR0Ptr(addr);
-        /* Ensure the PD switch completes before we do anything else */
-        isb();
-    }
 }
 
 static inline void setKernelStack(word_t stack_address)

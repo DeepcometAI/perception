@@ -233,28 +233,115 @@ BOOT_CODE void map_kernel_frame(paddr_t paddr, pptr_t vaddr, vm_rights_t vm_righ
                                                                                             attr_index);
 }
 
-BOOT_CODE void map_kernel_window(void)
-{
+/* Essentially, assert that the ELF, kernel devices, and log buffer are all in the same PUD.
+   In the current code this is the top index. This is arbitrary, the important part
+   is that they are all the same.
+ */
+compile_assert(elf_in_kernel_mappings, GET_KPT_INDEX(KERNEL_ELF_BASE,
+                                                     KLVL_FRM_ARM_PT_LVL(1)) == BIT(PT_INDEX_BITS) - 1);
+compile_assert(kdev_in_kernel_mappings, GET_KPT_INDEX(KDEV_BASE,
+                                                      KLVL_FRM_ARM_PT_LVL(1)) == BIT(PT_INDEX_BITS) - 1);
+compile_assert(log_buf_in_kernel_mappings, GET_KPT_INDEX(KS_LOG_BASE,
+                                                         KLVL_FRM_ARM_PT_LVL(1)) == BIT(PT_INDEX_BITS) - 1);
 
+/**
+ *  Per ARM ARM DDI 0487 (version L.b), in B2.11 "Mismatched memory attributes",
+ *  when physical memory locations are accessed with mismatched attributes
+ *  (caching, memory type (device/normal), shareability), the coherency of these
+ *  memory locations may be lost, as well as various violations of read and
+ *  write orderings or atomic operations. Other ARM documents refer to the
+ *  situation in which two virtual addresses map to the same physical address as
+ *  "Memory aliasing" (e.g. Document ID 102376 0200_01_en).
+ *
+ *  Currently, the memory attributes used in the physical memory window does
+ *  match that of the kernel ELF mapping, so this is OK. At the same time,
+ *  the current physical window mapping does use NORMAL memory covering memory
+ *  that is not DRAM, which is questionable for newer processors with more
+ *  speculative execution. (FIXME)
+ *
+ *  Hence, the kernel should never access kernel ELF memory through the physical
+ *  memory window, i.e., never modify the result of `ptrFromPAddr()` when the
+ *  physical address lies within the kernel ELF. (Reads are fine if they
+ *  have been flushed appropriately per B2.11; this should be the case for
+ *  any paging structures).
+ *
+ *  As an addendum, LWN Article "ARM's multiply-mapped memory mess" specifies
+ *  that in ARMv6 specifications this kind of aliasing would be UNPREDICTABLE;
+ *  the current ARMv8 A-Profile specifications no longer contain this wording,
+ *  and instead specify the loss of coherency and other behaviours in B2.11.
+ */
+BOOT_CODE void map_kernel_elf_image(pte_t kernel_mapping_pds[])
+{
+    /** This is not strictly necessary, but to handle a non-aligned KERNEL_ELF_PADDR_BASE
+     *  we'd need to do a bit more logic and probably do what riscv64 does
+     *  where the *actual* KERNEL_ELF_BASE is rounded up to the alignment.
+     *  This is simpler and memory is cheap.
+     **/
+    compile_assert(elf_paddr_aligned, IS_ALIGNED(KERNEL_ELF_PADDR_BASE_RAW, seL4_LargePageBits));
+    compile_assert(elf_base_aligned, IS_ALIGNED(KERNEL_ELF_BASE, seL4_LargePageBits));
+
+    /* Please don't overlap with KDEV_BASE */
+    assert(KERNEL_ELF_TOP <= KDEV_BASE);
+    /* Please don't overlap with KS_LOG_PPTR */
+    assert(KERNEL_ELF_TOP <= KS_LOG_PPTR);
+
+    const word_t pd_start = GET_KPT_INDEX(KERNEL_ELF_BASE, KLVL_FRM_ARM_PT_LVL(2));
+    /* pd_end and ELF_TOP are both exclusive, so handle that correctly */
+    const word_t pd_end   = GET_KPT_INDEX(KERNEL_ELF_TOP - 1, KLVL_FRM_ARM_PT_LVL(2)) + 1;
+
+    paddr_t paddr = KERNEL_ELF_PADDR_BASE;
+    UNUSED pptr_t vaddr = KERNEL_ELF_BASE;
+
+    for (word_t pd = pd_start; pd < pd_end; pd++) {
+        assert(pd == GET_KPT_INDEX(vaddr, KLVL_FRM_ARM_PT_LVL(2)));
+
+        kernel_mapping_pds[pd] = pte_pte_page_new(
+#ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
+                                     /* XN */ 0,
+#else
+                                     /* UXN */ 1,
+#endif
+                                     /* page_base_address */ paddr,
+                                     /* global (nG) */ 0,
+                                     /* access flag (AF) */ 1,
+                                     /* shareability (SH) */ SMP_TERNARY(SMP_SHARE, 0),
+                                     /* AP */ APFromVMRights(VMKernelOnly),
+                                     /* AttrIndx */ NORMAL
+                                 );
+
+        paddr += BIT(seL4_LargePageBits);
+        vaddr += BIT(seL4_LargePageBits);
+    }
+}
+
+#ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
+/* verify that the physical memory window as at the second entry of the PGD */
+compile_assert(physical_window_pgd_location,
+               GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(0)) == 1);
+#else
+/* verify that the physical memory window as at the last entry of the PGD */
+compile_assert(physical_window_pgd_location,
+               GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(0)) == BIT(PT_INDEX_BITS) - 1);
+#endif
+/* make sure that the PPTR_BASE and PPTR_TOP are huge paged aligned */
+compile_assert(physical_window_base_aligned, IS_ALIGNED(PPTR_BASE, seL4_HugePageBits));
+compile_assert(physical_window_top_aligned, IS_ALIGNED(PPTR_TOP, seL4_HugePageBits));
+
+/* the PPTR_BASE starts from the bottom of the kernel PUD */
+compile_assert(physical_window_bottom_kernel_region,
+               GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(1)) == 0);
+/* the PPTR_TOP then ends at the second-to-last entry of the PUD
+    note: because this is the exclusive value the assert is one higher than
+          you would expect.
+*/
+compile_assert(physical_window_top_kernel_region,
+               GET_KPT_INDEX(PPTR_TOP, KLVL_FRM_ARM_PT_LVL(1)) == BIT(PT_INDEX_BITS) - 1);
+
+BOOT_CODE void map_kernel_physical_window(void)
+{
     paddr_t paddr;
     pptr_t vaddr;
     word_t idx;
-
-#ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
-    /* verify that the kernel window as at the second entry of the PGD */
-    assert(GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(0)) == 1);
-#else
-    /* verify that the kernel window as at the last entry of the PGD */
-    assert(GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(0)) == BIT(PT_INDEX_BITS) - 1);
-#endif
-    assert(IS_ALIGNED(PPTR_BASE, seL4_LargePageBits));
-    /* verify that the kernel device window is 1gb aligned and 1gb in size */
-    assert(GET_KPT_INDEX(PPTR_TOP, KLVL_FRM_ARM_PT_LVL(1)) == BIT(PT_INDEX_BITS) - 1);
-    assert(IS_ALIGNED(PPTR_TOP, seL4_HugePageBits));
-
-    /* place the PUD into the PGD */
-    armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(0))] = pte_pte_table_new(
-                                                                                 addrFromKPPtr(armKSGlobalKernelPUD));
 
     /* place all PDs except the last one in PUD */
     for (idx = GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(1)); idx < GET_KPT_INDEX(PPTR_TOP, KLVL_FRM_ARM_PT_LVL(1));
@@ -270,7 +357,7 @@ BOOT_CODE void map_kernel_window(void)
         armKSGlobalKernelPDs[GET_KPT_INDEX(vaddr, KLVL_FRM_ARM_PT_LVL(1))][GET_KPT_INDEX(vaddr,
                                                                                          KLVL_FRM_ARM_PT_LVL(2))] = pte_pte_page_new(
 #ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
-                                                                                                                        0, // XN
+                                                                                                                        1, // XN
 #else
                                                                                                                         1, // UXN
 #endif
@@ -283,16 +370,30 @@ BOOT_CODE void map_kernel_window(void)
                                                                                                                     );
         vaddr += BIT(seL4_LargePageBits);
     }
+}
 
-    /* put the PD into the PUD for device window */
-    armKSGlobalKernelPUD[GET_KPT_INDEX(PPTR_TOP, KLVL_FRM_ARM_PT_LVL(1))] = pte_pte_table_new(
-                                                                                addrFromKPPtr(&armKSGlobalKernelPDs[BIT(PT_INDEX_BITS) - 1][0])
-                                                                            );
+BOOT_CODE void map_kernel_window(void)
+{
+    /* place the PUD into the PGD */
+    armKSGlobalKernelPGD[GET_KPT_INDEX(PPTR_BASE, KLVL_FRM_ARM_PT_LVL(0))] =
+        pte_pte_table_new(addrFromKPPtr(armKSGlobalKernelPUD));
 
-    /* put the PT into the PD for device window */
-    armKSGlobalKernelPDs[BIT(PT_INDEX_BITS) - 1][BIT(PT_INDEX_BITS) - 1] = pte_pte_table_new(
-                                                                               addrFromKPPtr(armKSGlobalKernelPT)
-                                                                           );
+    map_kernel_physical_window();
+
+    const word_t elf_pud_idx = GET_KPT_INDEX(KERNEL_ELF_BASE, KLVL_FRM_ARM_PT_LVL(1));
+    pte_t *kernel_mapping_pds = armKSGlobalKernelPDs[elf_pud_idx];
+
+    /* place the kernel mapping PDs in the kernel mapping PUD */
+    armKSGlobalKernelPUD[elf_pud_idx] = pte_pte_table_new(addrFromKPPtr(kernel_mapping_pds));
+
+    /* map the kernel ELF */
+    map_kernel_elf_image(kernel_mapping_pds);
+
+    /* put the PT into the PD for device window. It would be nice if
+       we could pass kernel_mapping_pds[511] to map_kernel_devices(), but it is
+       shared between AArch64 and AArch32, so... */
+    kernel_mapping_pds[BIT(PT_INDEX_BITS) - 1]
+        = pte_pte_table_new(addrFromKPPtr(armKSGlobalKernelPT));
 
     map_kernel_devices();
 }
@@ -543,10 +644,10 @@ BOOT_CODE cap_t create_mapped_it_frame_cap(cap_t pd_cap, pptr_t pptr, vptr_t vpt
 BOOT_CODE void activate_kernel_vspace(void)
 {
     cleanInvalidateL1Caches();
-    setCurrentKernelVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalKernelPGD)));
+    setCurrentKernelVSpaceRoot(ttbr_new(hwASIDReserved, addrFromKPPtr(armKSGlobalKernelPGD)));
 
     /* Prevent elf-loader address translation to fill up TLB */
-    setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
+    setCurrentUserVSpaceRoot(ttbr_new(hwASIDReserved, addrFromKPPtr(armKSGlobalUserVSpace)));
 
     invalidateLocalTLB();
     lockTLBEntry(KERNEL_ELF_BASE);
@@ -685,9 +786,10 @@ static lookupPTSlot_ret_t lookupPTSlot(vspace_root_t *vspace, vptr_t vptr)
 /* Note that if the hypervisor support is enabled, the user page tables use
  * stage-2 translation format. Otherwise, they follow the stage-1 translation format.
  */
-static pte_t makeUserPagePTE(paddr_t paddr, vm_rights_t vm_rights, vm_attributes_t attributes, vm_page_size_t page_size)
+static pte_t makeUserPagePTE(paddr_t paddr, vm_rights_t vm_rights, bool_t cap_read, vm_attributes_t attributes,
+                             vm_page_size_t page_size)
 {
-    bool_t nonexecutable = vm_attributes_get_armExecuteNever(attributes);
+    bool_t nonexecutable = vm_attributes_get_armExecuteNever(attributes) || !cap_read;
     word_t cacheable = vm_attributes_get_armPageCacheable(attributes);
 
 #ifdef CONFIG_ARM_HYPERVISOR_SUPPORT
@@ -774,8 +876,11 @@ void setVMRoot(tcb_t *tcb)
 
     threadRoot = TCB_PTR_CTE_PTR(tcb, tcbVTable)->cap;
 
+    /* ASID/VMID 0 is never allocated to a real VSpace (see findFreeHWASID()
+     * for the hypervisor case), so the empty global VSpace can be installed
+     * under it without flushing the TLB. */
     if (!isValidNativeRoot(threadRoot)) {
-        setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
+        setCurrentUserVSpaceRoot(ttbr_new(hwASIDReserved, addrFromKPPtr(armKSGlobalUserVSpace)));
         return;
     }
 
@@ -783,7 +888,7 @@ void setVMRoot(tcb_t *tcb)
     asid = cap_vspace_cap_get_capVSMappedASID(threadRoot);
     find_ret = findVSpaceForASID(asid);
     if (unlikely(find_ret.status != EXCEPTION_NONE || find_ret.vspace_root != vspaceRoot)) {
-        setCurrentUserVSpaceRoot(ttbr_new(0, addrFromKPPtr(armKSGlobalUserVSpace)));
+        setCurrentUserVSpaceRoot(ttbr_new(hwASIDReserved, addrFromKPPtr(armKSGlobalUserVSpace)));
         return;
     }
 
@@ -867,23 +972,23 @@ static hw_asid_t findFreeHWASID(void)
          hw_asid_offset <= (word_t)((hw_asid_t) - 1);
          hw_asid_offset++) {
         hw_asid = armKSNextASID + ((hw_asid_t)hw_asid_offset);
-        if (armKSHWASIDTable[hw_asid] == asidInvalid) {
+        if (hw_asid != hwASIDReserved && armKSHWASIDTable[hw_asid] == asidInvalid) {
             return hw_asid;
         }
     }
-
-    hw_asid = armKSNextASID;
-
     /* If we've scanned the table without finding a free ASID */
+    hw_asid = armKSNextASID;
     invalidateASID(armKSHWASIDTable[hw_asid]);
 
     /* Flush TLB */
     invalidateTranslationASID(hw_asid);
     armKSHWASIDTable[hw_asid] = asidInvalid;
 
-    /* Increment the NextASID index */
+    /* Increment the NextASID index, skipping the reserved VMID 0 on wrap */
     armKSNextASID++;
-
+    if (armKSNextASID == hwASIDReserved) {
+        armKSNextASID = hwASIDMin;
+    }
     return hw_asid;
 }
 
@@ -1134,6 +1239,8 @@ static void doFlush(word_t invLabel, vptr_t start, vptr_t end, paddr_t pstart)
         /* ...then invalidate the corresponding instruction lines
            to point of unification... */
         invalidateCacheRange_I(start, end, pstart);
+        /* ... then wait for the completion of invalidations... */
+        dsb();
         /* ... and ensure new instructions come from fresh cache lines. */
         isb();
         break;
@@ -1513,7 +1620,7 @@ static exception_t decodeARMFrameInvocation(word_t invLabel, word_t length,
         cap_t vspaceRootCap;
         vspace_root_t *vspaceRoot;
         asid_t asid, frame_asid;
-        vm_rights_t vmRights;
+        vm_rights_t vmRights, capRights;
         vm_page_size_t frameSize;
         vm_attributes_t attributes;
         findVSpaceForASID_ret_t find_ret;
@@ -1528,8 +1635,8 @@ static exception_t decodeARMFrameInvocation(word_t invLabel, word_t length,
         vspaceRootCap = current_extra_caps.excaprefs[0]->cap;
 
         frameSize = cap_frame_cap_get_capFSize(cap);
-        vmRights = maskVMRights(cap_frame_cap_get_capFVMRights(cap),
-                                rightsFromWord(getSyscallArg(1, buffer)));
+        capRights = cap_frame_cap_get_capFVMRights(cap);
+        vmRights = maskVMRights(capRights, rightsFromWord(getSyscallArg(1, buffer)));
 
         if (unlikely(!isValidNativeRoot(vspaceRootCap))) {
             current_syscall_error.type = seL4_InvalidCapability;
@@ -1595,9 +1702,11 @@ static exception_t decodeARMFrameInvocation(word_t invLabel, word_t length,
             return EXCEPTION_SYSCALL_ERROR;
         }
 
+        bool_t cap_read = (capRights == VMReadOnly || capRights == VMReadWrite);
+        pte_t pte = makeUserPagePTE(base, vmRights, cap_read, attributes, frameSize);
+
         setThreadState(NODE_STATE(ksCurThread), ThreadState_Restart);
-        return performPageInvocationMap(asid, cap, cte,
-                                        makeUserPagePTE(base, vmRights, attributes, frameSize), lu_ret.ptSlot);
+        return performPageInvocationMap(asid, cap, cte, pte, lu_ret.ptSlot);
     }
 
     case ARMPageUnmap:

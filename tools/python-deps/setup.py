@@ -24,6 +24,8 @@ twine upload -r pypi dist/*
 
 from setuptools import setup
 
+# six and future are for python 2 compatibility and will be removed in the future.
+# They are currently kept so current sel4-deps still works with older code bases.
 DEPS = [
     'six',
     'future',
@@ -42,11 +44,16 @@ DEPS = [
     'guardonce',
     'autopep8==2.3.2',
     'libarchive-c',
+    'typing_extensions',
+    # nanopb 0.4.9.1 has requires_dist protobuf>=3.19
+    # protoc on Ubuntu 22.04 requires protobuf<4; can be dropped after EOL of
+    # Ubuntu 22.04 in Apr 2027
+    'protobuf>=3.19,<4',
 ]
 
 setup(
     name='sel4-deps',
-    version='0.7.0',
+    version='0.9.0',
     description='Metapackage for downloading build dependencies for the seL4 microkernel',
     long_description="""
 This meta package depends on all python packages you need to build the seL4 microkernel and manual.

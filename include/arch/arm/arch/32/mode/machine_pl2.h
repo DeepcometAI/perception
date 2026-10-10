@@ -24,32 +24,10 @@ static inline void writeContextIDPL2(word_t id)
     isb();
 }
 
-/** Sets the stage 2 translation table base address and VMID.
- *
- * The only difference between this and setCurrentPDPL2() is that
- * the latter preserves the VMID.
- */
+/** Sets the stage 2 translation table base address and VMID. */
 static inline void writeContextIDAndPD(word_t id, word_t pd_val)
 {
     asm volatile("mcrr p15, 6, %0, %1, c2"  : : "r"(pd_val), "r"(id << (48-32)));
-    isb();
-}
-
-/** Sets the stage 2 translation table base address.
- *
- * "P15, 6, <r0>, <r1>, c2" refers to the VTTBR register.
- *
- * VTTBR can only be accessed in hyp mode (or monitor mode with SCR.NS==1).
- * It sets the physical address of the page tables that the CPU will walk
- * for stage 2 translation. It also sets the VMID of the current stage 2
- * address space.
- */
-static inline void setCurrentPDPL2(paddr_t addr)
-{
-    word_t pd_val, vmid;
-    asm volatile("mrrc p15, 6, %0, %1, c2" : "=r"(pd_val), "=r"(vmid));
-    dsb();
-    asm volatile("mcrr p15, 6, %0, %1, c2" : : "r"(addr), "r"(vmid));
     isb();
 }
 
@@ -96,6 +74,20 @@ static inline word_t PURE getHCPTR(void)
     return HCPTR;
 }
 
+static inline void setHSTR(word_t r)
+{
+    dsb();
+    asm volatile("mcr p15, 4, %0, c1, c1, 3" : : "r"(r));
+    isb();
+}
+
+static inline word_t PURE getHSTR(void)
+{
+    word_t HSTR;
+    asm volatile("mrc p15, 4, %0, c1, c1, 3" : "=r"(HSTR));
+    return HSTR;
+}
+
 static inline void setHMAIR(word_t hmair0, word_t hmair1)
 {
     asm volatile("mcr p15, 4, %0, c10, c2, 0" : : "r"(hmair0));
@@ -118,12 +110,18 @@ static inline void invalidateHypTLB(void)
     isb();
 }
 
-static inline paddr_t PURE addressTranslateS1(vptr_t vaddr)
+static inline paddr_t addressTranslateS1(vptr_t vaddr)
 {
     uint32_t ipa0, ipa1;
+    uint32_t saved_ipa0, saved_ipa1;
+
+    asm volatile("mrrc p15, 0, %0, %1, c7"   : "=r"(saved_ipa0), "=r"(saved_ipa1));
+
     asm volatile("mcr  p15, 0, %0, c7, c8, 0" :: "r"(vaddr));
     isb();
     asm volatile("mrrc p15, 0, %0, %1, c7"   : "=r"(ipa0), "=r"(ipa1));
+
+    asm volatile("mcrr p15, 0, %0, %1, c7"   :: "r"(saved_ipa0), "r"(saved_ipa1));
 
     return ipa0;
 }
@@ -176,7 +174,6 @@ static inline void writeHTPIDR(word_t reg)
 #else
 
 /* used in other files without guards */
-static inline void setCurrentPDPL2(paddr_t pa) {}
 static inline void invalidateHypTLB(void) {}
 static inline void writeContextIDPL2(word_t pd_val) {}
 static inline void writeContextIDAndPD(word_t id, word_t pd_val) {}

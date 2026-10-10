@@ -25,8 +25,6 @@
 #define VMX_EXIT_QUAL_TYPE_CLTS 2
 #define VMX_EXIT_QUAL_TYPE_LMSW 3
 
-#define VMXON_REGION_SIZE 4096
-
 const vcpu_gp_register_t crExitRegs[] = {
     VCPU_EAX, VCPU_ECX, VCPU_EDX, VCPU_EBX, VCPU_ESP, VCPU_EBP, VCPU_ESI, VCPU_EDI,
 #ifdef CONFIG_X86_64_VTX_64BIT_GUESTS
@@ -47,14 +45,9 @@ typedef struct msr_bitmaps {
     msr_bitmap_t high_msr_write;
 } msr_bitmaps_t;
 
-static struct PACKED {
-    uint32_t revision;
-    char data[VMXON_REGION_SIZE - sizeof(uint32_t)];
-} vmxon_region ALIGN(VMXON_REGION_SIZE);
-
 static msr_bitmaps_t msr_bitmap_region ALIGN(BIT(seL4_PageBits));
 
-static char null_ept_space[seL4_PageBits] ALIGN(BIT(seL4_PageBits));
+static char null_ept_space[BIT(seL4_PageBits)] ALIGN(BIT(seL4_PageBits));
 
 /* Cached value of the hardware defined vmcs revision */
 static uint32_t vmcs_revision;
@@ -87,6 +80,8 @@ static bool_t vmx_feature_ack_on_exit;
 
 static vcpu_t *x86KSVPIDTable[VPID_LAST + 1];
 static vpid_t x86KSNextVPID = VPID_FIRST;
+
+static void releaseVPID(vpid_t vpid);
 
 static inline bool_t vmxon(paddr_t vmxon_region)
 {
@@ -554,6 +549,9 @@ void vcpu_finalise(vcpu_t *vcpu)
     if (vcpu->vcpuTCB) {
         dissociateVcpuTcb(vcpu->vcpuTCB, vcpu);
     }
+    if (vcpu->vpid != VPID_INVALID) {
+        releaseVPID(vcpu->vpid);
+    }
 }
 
 static void associateVcpuTcb(tcb_t *tcb, vcpu_t *vcpu)
@@ -666,6 +664,9 @@ static exception_t invokeReadMSR(vcpu_t *vcpu, word_t field, word_t *buffer)
     case IA32_FMASK_MSR:
         value = vcpu->syscall_registers[VCPU_SYSCALL_MASK];
         break;
+    case IA32_VMX_MISC_MSR:
+        value = x86_rdmsr(field);
+        break;
     }
 
     setMR(thread, buffer, 0, value);
@@ -688,6 +689,7 @@ static exception_t decodeVCPUReadMSR(cap_t cap, word_t length, word_t *buffer)
     case IA32_STAR_MSR:
     case IA32_CSTAR_MSR:
     case IA32_FMASK_MSR:
+    case IA32_VMX_MISC_MSR:
         break;
     default:
         userError("VCPU ReadMSR: Invalid field %lx.", (long)field);
@@ -1213,13 +1215,14 @@ BOOT_CODE bool_t vtx_init(void)
     }
     write_cr4(read_cr4() | CR4_VMXE);
     /* we are required to set the VMCS region in the VMXON region */
-    vmxon_region.revision = vmcs_revision;
+    struct vmxon_region *vmxon_kptr = &ARCH_NODE_STATE(x86KSVMXOnRegion);
+    vmxon_kptr->revision = vmcs_revision;
     /* Before calling vmxon, we must check that CR0 and CR4 are not set to values
      * that are unsupported by vt-x */
     if (!vtx_check_fixed_values(read_cr0(), read_cr4())) {
         return false;
     }
-    if (vmxon(kpptr_to_paddr(&vmxon_region))) {
+    if (vmxon(kpptr_to_paddr(vmxon_kptr))) {
         printf("vt-x: vmxon failure\n");
         return false;
     }
@@ -1325,16 +1328,19 @@ exception_t handleVmexit(void)
     /* the basic exit reason is the bottom 16 bits of the exit reason field */
     reason = vmread(VMX_DATA_EXIT_REASON) & MASK(16);
     if (reason == EXTERNAL_INTERRUPT) {
+        NODE_LOCK_IRQ;
         if (vmx_feature_ack_on_exit) {
-            interrupt = vmread(VMX_DATA_EXIT_INTERRUPT_INFO);
-            ARCH_NODE_STATE(x86KScurInterrupt) = interrupt & 0xff;
-            NODE_LOCK_IRQ_IF(interrupt != int_remote_call_ipi);
+            interrupt = vmread(VMX_DATA_EXIT_INTERRUPT_INFO) & 0xff;
+            ARCH_NODE_STATE(x86KScurInterrupt) = interrupt;
             handleInterruptEntry();
         } else {
             /* poll for the pending irq. We will then handle it once we return back
              * up to restore_user_context */
             receivePendingIRQ();
         }
+#ifdef ENABLE_SMP_SUPPORT
+        VMCheckBoundNotification(NODE_STATE(ksCurThread));
+#endif
         return EXCEPTION_NONE;
     }
 
@@ -1488,6 +1494,16 @@ static void invalidateVPID(vpid_t vpid)
     }
 }
 
+/** Disassociate a VPID from its VCPU */
+static void releaseVPID(vpid_t vpid)
+{
+    vcpu_t *vcpu = x86KSVPIDTable[vpid];
+
+    invalidateVPID(vpid);
+    vcpu->vpid = VPID_INVALID;
+    x86KSVPIDTable[vpid] = NULL;
+}
+
 static vpid_t findFreeVPID(void)
 {
     vpid_t vpid;
@@ -1500,12 +1516,9 @@ static vpid_t findFreeVPID(void)
         vpid = nextVPID(vpid);
     } while (vpid != x86KSNextVPID);
 
-    /* Forcively take the next VPID */
+    /* Forcibly take the next VPID */
     vpid = x86KSNextVPID;
-    invalidateVPID(vpid);
-
-    x86KSVPIDTable[vpid]->vpid = VPID_INVALID;
-    x86KSVPIDTable[vpid] = NULL;
+    releaseVPID(vpid);
 
     x86KSNextVPID = nextVPID(x86KSNextVPID);
     return vpid;

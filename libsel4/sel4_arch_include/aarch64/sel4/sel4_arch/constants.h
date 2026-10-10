@@ -89,7 +89,7 @@ typedef enum {
     seL4_VCPUReg_AFSR1,
     seL4_VCPUReg_ESR,
     seL4_VCPUReg_FAR,
-    seL4_VCPUReg_ISR,
+    seL4_VCPUReg_PAR,
     seL4_VCPUReg_VBAR,
 
     /* thread pointer/ID registers EL0/EL1 */
@@ -102,7 +102,13 @@ typedef enum {
     seL4_VCPUReg_SP_EL1,
     seL4_VCPUReg_ELR_EL1,
     seL4_VCPUReg_SPSR_EL1, // 32-bit
-    seL4_VCPURegSaveRange_end = seL4_VCPUReg_SPSR_EL1, /* end vcpu save/restore reg range */
+
+    /* cache size selection register EL1 */
+    seL4_VCPUReg_CSSELR_EL1,
+
+    /* virtual deferred interrupt status register EL2 */
+    seL4_VCPUReg_VDISR_EL2,
+    seL4_VCPURegSaveRange_end = seL4_VCPUReg_VDISR_EL2, /* end vcpu save/restore reg range */
 
     /* generic timer registers, to be completed */
     seL4_VCPUReg_CNTV_CTL,
@@ -171,7 +177,7 @@ typedef enum {
 #define seL4_HugePageBits 30
 #define seL4_SlotBits 5
 #if defined(CONFIG_HARDWARE_DEBUG_API) || defined(CONFIG_ARM_HYP_ENABLE_VCPU_CP14_SAVE_AND_RESTORE) || \
-    (defined(CONFIG_ARM_HYPERVISOR_SUPPORT) && defined(CONFIG_ENABLE_SMP_SUPPORT) && defined(CONFIG_BENCHMARK_TRACK_UTILISATION))
+    (defined(CONFIG_ARM_HYPERVISOR_SUPPORT) && defined(CONFIG_ENABLE_SMP_SUPPORT) && defined(CONFIG_BENCHMARK_TRACK_UTILISATION) && !defined(CONFIG_KERNEL_MCS))
 #define seL4_TCBBits 12
 #else
 #define seL4_TCBBits 11
@@ -243,7 +249,7 @@ SEL4_SIZE_SANITY(seL4_VSpaceEntryBits, seL4_VSpaceIndexBits, seL4_VSpaceBits);
  * Anything address above the range above triggers an
  * address size fault.
  */
-/* First address in the virtual address space that is not accessible to user level */
+/* (Deprecated) Last address in the virtual address space that is accessible to user level */
 #if defined(CONFIG_ARM_PA_SIZE_BITS_44)
 #define seL4_UserTop 0x00000fffffffffff
 #elif defined(CONFIG_ARM_PA_SIZE_BITS_40)
@@ -253,6 +259,9 @@ SEL4_SIZE_SANITY(seL4_VSpaceEntryBits, seL4_VSpaceIndexBits, seL4_VSpaceBits);
 #endif
 
 #else
-/* First address in the virtual address space that is not accessible to user level */
+/* (Deprecated) Last address in the virtual address space that is accessible to user level */
 #define seL4_UserTop 0x00007fffffffffff
 #endif
+
+/* Last address in the virtual address space that is accessible to user level */
+#define seL4_UserVSpaceTop seL4_UserTop

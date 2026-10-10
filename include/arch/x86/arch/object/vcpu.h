@@ -232,6 +232,13 @@ typedef uint16_t vpid_t;
 #ifdef CONFIG_VTX
 #define VTX_TERNARY(vtx, nonvtx) vtx
 
+#define VMXON_REGION_SIZE 4096
+
+struct vmxon_region {
+    uint32_t revision;
+    char data[VMXON_REGION_SIZE - sizeof(uint32_t)];
+} ALIGN(VMXON_REGION_SIZE);
+
 enum vcpu_gp_register {
     VCPU_EAX = 0,
     VCPU_EBX,
@@ -296,9 +303,6 @@ struct vcpu {
     /* General purpose registers that we have to save and restore as they
      * are not part of the vmcs */
     word_t gp_registers[n_vcpu_gp_register];
-#if defined(ENABLE_SMP_SUPPORT) && defined(CONFIG_ARCH_IA32)
-    word_t kernelSP;
-#endif
 
     /* TCB associated with this VCPU. */
     struct tcb *vcpuTCB;
