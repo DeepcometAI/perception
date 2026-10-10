@@ -7,6 +7,8 @@
 # See sel4test-hw/builds.yml and sel4bench-hw/builds.yml in the repo
 # seL4/ci-actions for configs.
 
+# HW run is currently disabled for perception kernel
+
 name: HW
 
 on:
