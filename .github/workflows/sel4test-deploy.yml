@@ -102,7 +102,7 @@ jobs:
     concurrency: hw-run-${{ matrix.platform }}-${{ matrix.compiler }}-${{ matrix.mode }}
     steps:
       - name: Get machine queue
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: seL4/machine_queue
           path: machine_queue
